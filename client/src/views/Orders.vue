@@ -75,6 +75,41 @@
         </div>
       </div>
     </div>
+
+    <!-- Submitted restocking orders: independent of page filters and of the orders table state -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">{{ t('restocking.submittedOrders') }} ({{ submittedOrders.length }})</h3>
+      </div>
+      <div v-if="submittedError" class="error">{{ submittedError }}</div>
+      <div v-else-if="submittedOrders.length === 0" class="submitted-empty">
+        {{ t('restocking.noSubmittedOrders') }}
+      </div>
+      <div v-else class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ t('restocking.orderTable.orderNumber') }}</th>
+              <th>{{ t('restocking.orderTable.items') }}</th>
+              <th>{{ t('restocking.orderTable.total') }}</th>
+              <th>{{ t('restocking.orderTable.submittedDate') }}</th>
+              <th>{{ t('restocking.orderTable.leadTime') }}</th>
+              <th>{{ t('restocking.orderTable.expectedDelivery') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="order in submittedOrders" :key="order.order_number">
+              <td><strong>{{ order.order_number }}</strong></td>
+              <td>{{ formatSubmittedItems(order.items) }}</td>
+              <td><strong>{{ formatMoney(order.total_value) }}</strong></td>
+              <td>{{ formatDate(order.order_date) }}</td>
+              <td>{{ order.lead_time_days }} {{ t('restocking.days') }}</td>
+              <td>{{ formatDate(order.expected_delivery) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -83,6 +118,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { api } from '../api'
 import { useFilters } from '../composables/useFilters'
 import { useI18n } from '../composables/useI18n'
+import { formatCurrency } from '../utils/currency'
 
 export default {
   name: 'Orders',
@@ -95,6 +131,9 @@ export default {
     const loading = ref(true)
     const error = ref(null)
     const orders = ref([])
+
+    const submittedOrders = ref([])
+    const submittedError = ref(null)
 
     // Use shared filters
     const {
@@ -122,6 +161,24 @@ export default {
       } finally {
         loading.value = false
       }
+    }
+
+    // Own try/catch so a failure here never affects the main orders table
+    const loadSubmittedOrders = async () => {
+      try {
+        submittedError.value = null
+        submittedOrders.value = await api.getRestockingOrders()
+      } catch (err) {
+        console.error('Failed to load restocking orders:', err)
+        submittedError.value = t('restocking.submittedError')
+      }
+    }
+
+    const formatMoney = (amount) => formatCurrency(amount, currentCurrency.value)
+
+    // "SKU x qty" pairs, comma separated
+    const formatSubmittedItems = (items) => {
+      return (items || []).map(i => `${i.sku} x ${i.quantity}`).join(', ')
     }
 
     // Watch for filter changes and reload data
@@ -153,10 +210,18 @@ export default {
       })
     }
 
-    onMounted(loadOrders)
+    // Submitted orders are not filter-dependent, so load them once on mount
+    onMounted(() => {
+      loadOrders()
+      loadSubmittedOrders()
+    })
 
     return {
       t,
+      submittedOrders,
+      submittedError,
+      formatMoney,
+      formatSubmittedItems,
       loading,
       error,
       orders,
@@ -172,6 +237,12 @@ export default {
 </script>
 
 <style scoped>
+.submitted-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+}
+
 /* Fixed table layout to prevent column shifting */
 .orders-table {
   table-layout: fixed;

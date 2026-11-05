@@ -4,6 +4,7 @@ export default {
     overview: '概要',
     inventory: '在庫',
     orders: '注文',
+    restocking: '補充発注',
     finance: '財務',
     demandForecast: '需要予測',
     companyName: '触媒コンポーネンツ',
@@ -186,6 +187,43 @@ export default {
       trend: 'トレンド',
       period: '期間'
     }
+  },
+
+  // 補充発注
+  restocking: {
+    title: '補充発注',
+    description: '需要予測の増加に基づき、予算内で補充発注を計画します',
+    budget: '予算',
+    budgetLabel: '補充予算',
+    totalSpend: '合計支出',
+    remaining: '残予算',
+    recommendedItems: '推奨品目',
+    empty: '現在の予算で補充できる品目はありません。',
+    placeOrder: '発注する',
+    submitting: '送信中...',
+    orderSuccess: '注文 {orderNumber} を送信しました。予定リードタイム: {days}日',
+    orderError: '補充注文の送信に失敗しました。もう一度お試しください。',
+    loadError: '需要予測の読み込みに失敗しました',
+    table: {
+      sku: 'SKU',
+      itemName: '品名',
+      trend: 'トレンド',
+      quantity: '数量',
+      unitCost: '単価',
+      lineTotal: '小計'
+    },
+    submittedOrders: '送信済み補充注文',
+    noSubmittedOrders: '送信済みの補充注文はまだありません。',
+    submittedError: '送信済み補充注文の読み込みに失敗しました',
+    orderTable: {
+      orderNumber: '注文番号',
+      items: '品目',
+      total: '合計金額',
+      submittedDate: '送信日',
+      leadTime: 'リードタイム',
+      expectedDelivery: '納品予定日'
+    },
+    days: '日'
   },
 
   // Filters
