@@ -4,6 +4,7 @@ export default {
     overview: 'Overview',
     inventory: 'Inventory',
     orders: 'Orders',
+    restocking: 'Restocking',
     finance: 'Finance',
     demandForecast: 'Demand Forecast',
     companyName: 'Catalyst Components',
@@ -186,6 +187,43 @@ export default {
       trend: 'Trend',
       period: 'Period'
     }
+  },
+
+  // Restocking
+  restocking: {
+    title: 'Restocking',
+    description: 'Plan a restocking order within your budget based on forecasted demand increases',
+    budget: 'Budget',
+    budgetLabel: 'Restocking budget',
+    totalSpend: 'Total Spend',
+    remaining: 'Remaining',
+    recommendedItems: 'Recommended Items',
+    empty: 'No items can be restocked with the current budget.',
+    placeOrder: 'Place Order',
+    submitting: 'Submitting...',
+    orderSuccess: 'Order {orderNumber} submitted. Estimated lead time: {days} days.',
+    orderError: 'Failed to submit restocking order. Please try again.',
+    loadError: 'Failed to load demand forecasts',
+    table: {
+      sku: 'SKU',
+      itemName: 'Item Name',
+      trend: 'Trend',
+      quantity: 'Quantity',
+      unitCost: 'Unit Cost',
+      lineTotal: 'Line Total'
+    },
+    submittedOrders: 'Submitted Restocking Orders',
+    noSubmittedOrders: 'No restocking orders have been submitted yet.',
+    submittedError: 'Failed to load submitted restocking orders',
+    orderTable: {
+      orderNumber: 'Order Number',
+      items: 'Items',
+      total: 'Total Value',
+      submittedDate: 'Submitted',
+      leadTime: 'Lead Time',
+      expectedDelivery: 'Expected Delivery'
+    },
+    days: 'days'
   },
 
   // Filters

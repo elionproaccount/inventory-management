@@ -1,7 +1,9 @@
+import math
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from mock_data import inventory_items, orders, demand_forecasts, backlog_items, spending_summary, monthly_spending, category_spending, recent_transactions, purchase_orders
 
 app = FastAPI(title="Factory Inventory Management System")
@@ -89,6 +91,7 @@ class DemandForecast(BaseModel):
     forecasted_demand: int
     trend: str
     period: str
+    unit_cost: Optional[float] = None
 
 class BacklogItem(BaseModel):
     id: str
@@ -119,6 +122,59 @@ class CreatePurchaseOrderRequest(BaseModel):
     unit_cost: float
     expected_delivery_date: str
     notes: Optional[str] = None
+
+class RestockingOrderItem(BaseModel):
+    sku: str
+    name: str
+    quantity: int
+    unit_cost: float
+    line_total: float
+
+class RequestedRestockingItem(BaseModel):
+    sku: str
+    quantity: int = Field(gt=0)
+
+class CreateRestockingOrderRequest(BaseModel):
+    items: List[RequestedRestockingItem] = Field(min_length=1)
+
+class RestockingOrder(BaseModel):
+    id: str
+    order_number: str
+    items: List[RestockingOrderItem]
+    total_value: float
+    status: str
+    order_date: str
+    lead_time_days: int
+    expected_delivery: str
+
+# Submitted restocking orders live in memory only and reset on restart, like all other data.
+# They are kept apart from `orders` so /api/orders filters, dashboard counts and reports are unchanged.
+restocking_orders: list = []
+
+def calculate_lead_time_days(skus: List[str]) -> int:
+    """Estimate delivery lead time in days from historical orders.
+
+    Each SKU's lead time is the average (expected_delivery - order_date) over past orders
+    containing it. SKUs with no order history fall back to the average across all orders.
+    A restocking order ships together, so it is only as fast as its slowest item.
+    """
+    def lead_days(order: dict) -> Optional[float]:
+        try:
+            delta = datetime.fromisoformat(order['expected_delivery']) - datetime.fromisoformat(order['order_date'])
+        except (KeyError, ValueError, TypeError):
+            return None  # skip orders with missing or malformed dates
+        return delta.total_seconds() / 86400
+
+    all_lead_times = [d for d in (lead_days(o) for o in orders) if d is not None]
+    overall_avg = sum(all_lead_times) / len(all_lead_times) if all_lead_times else 14
+
+    per_sku = []
+    for sku in skus:
+        times = [d for o in orders if any(i.get('sku') == sku for i in o.get('items', []))
+                 for d in [lead_days(o)] if d is not None]
+        per_sku.append(sum(times) / len(times) if times else overall_avg)
+
+    return math.ceil(max(per_sku)) if per_sku else math.ceil(overall_avg)
 
 # API endpoints
 @app.get("/")
@@ -178,6 +234,53 @@ def get_backlog():
         item_dict["has_purchase_order"] = has_po
         result.append(item_dict)
     return result
+
+@app.post("/api/restocking-orders", response_model=RestockingOrder, status_code=201)
+def create_restocking_order(request: CreateRestockingOrderRequest):
+    """Submit a restocking order for items from the demand forecast"""
+    forecasts_by_sku = {f["item_sku"]: f for f in demand_forecasts}
+    requested_skus = [item.sku for item in request.items]
+
+    if len(set(requested_skus)) != len(requested_skus):
+        raise HTTPException(status_code=400, detail="Duplicate SKUs in order")
+
+    items = []
+    for requested in request.items:
+        forecast = forecasts_by_sku.get(requested.sku)
+        if not forecast:
+            raise HTTPException(status_code=400, detail=f"Unknown SKU {requested.sku}")
+        if forecast.get("unit_cost") is None:
+            raise HTTPException(status_code=400, detail=f"SKU {requested.sku} has no unit cost")
+        # Price comes from the server's data, never from the client
+        unit_cost = forecast["unit_cost"]
+        items.append({
+            "sku": requested.sku,
+            "name": forecast["item_name"],
+            "quantity": requested.quantity,
+            "unit_cost": unit_cost,
+            "line_total": round(unit_cost * requested.quantity, 2),
+        })
+
+    lead_time_days = calculate_lead_time_days(requested_skus)
+    now = datetime.now().replace(microsecond=0)
+    sequence = len(restocking_orders) + 1
+    order = {
+        "id": f"RST-{sequence}",
+        "order_number": f"RST-{now.year}-{sequence:04d}",
+        "items": items,
+        "total_value": round(sum(i["line_total"] for i in items), 2),
+        "status": "Submitted",
+        "order_date": now.isoformat(),
+        "lead_time_days": lead_time_days,
+        "expected_delivery": (now + timedelta(days=lead_time_days)).isoformat(),
+    }
+    restocking_orders.append(order)
+    return order
+
+@app.get("/api/restocking-orders", response_model=List[RestockingOrder])
+def get_restocking_orders():
+    """Get submitted restocking orders, newest first"""
+    return list(reversed(restocking_orders))
 
 @app.get("/api/dashboard/summary")
 def get_dashboard_summary(
